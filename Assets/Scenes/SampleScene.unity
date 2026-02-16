@@ -1518,23 +1518,27 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -7584827978028588409, guid: e2ee0c231ba124841927c2b7ea5b8bd0, type: 3}
       propertyPath: m_fIncSpeed
-      value: 0.0025
+      value: 0.002
       objectReference: {fileID: 0}
     - target: {fileID: -7584827978028588409, guid: e2ee0c231ba124841927c2b7ea5b8bd0, type: 3}
       propertyPath: m_fSlowSpeed
-      value: 0.06600001
+      value: 0.04
       objectReference: {fileID: 0}
     - target: {fileID: -7584827978028588409, guid: e2ee0c231ba124841927c2b7ea5b8bd0, type: 3}
       propertyPath: m_fFastRotateMax
-      value: 10
+      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: -7584827978028588409, guid: e2ee0c231ba124841927c2b7ea5b8bd0, type: 3}
       propertyPath: m_fMagnitudeFast
-      value: 0.6
+      value: 0.5
       objectReference: {fileID: 0}
     - target: {fileID: -7584827978028588409, guid: e2ee0c231ba124841927c2b7ea5b8bd0, type: 3}
       propertyPath: m_fMagnitudeSlow
-      value: 0.2
+      value: 0.1
+      objectReference: {fileID: 0}
+    - target: {fileID: -7584827978028588409, guid: e2ee0c231ba124841927c2b7ea5b8bd0, type: 3}
+      propertyPath: m_fFastEntrySpeed
+      value: 0.065
       objectReference: {fileID: 0}
     - target: {fileID: -7584827978028588409, guid: e2ee0c231ba124841927c2b7ea5b8bd0, type: 3}
       propertyPath: m_fDiveRecoveryTime
@@ -1844,6 +1848,14 @@ PrefabInstance:
       propertyPath: m_fHopTime
       value: 0.4
       objectReference: {fileID: 0}
+    - target: {fileID: 4597280884397473260, guid: 14486d0cabf232646b839a51f86300d5, type: 3}
+      propertyPath: m_catchClip
+      value: 
+      objectReference: {fileID: 8300000, guid: e75e623ca97bbdf4baa738742505d5b5, type: 3}
+    - target: {fileID: 4597280884397473260, guid: 14486d0cabf232646b839a51f86300d5, type: 3}
+      propertyPath: m_danceClip
+      value: 
+      objectReference: {fileID: 8300000, guid: d13454c9c1c88f149ac0790411da4d6d, type: 3}
     - target: {fileID: 4597280884397473260, guid: 14486d0cabf232646b839a51f86300d5, type: 3}
       propertyPath: m_fHopSpeed
       value: 3
