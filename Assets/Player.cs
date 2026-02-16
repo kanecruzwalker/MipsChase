@@ -6,12 +6,13 @@ public class Player : MonoBehaviour
 {
     // External tunables.
     static public float m_fMaxSpeed = 0.10f;
-    public float m_fSlowSpeed = m_fMaxSpeed * 0.66f;
-    public float m_fIncSpeed = 0.0025f;
+    public float m_fSlowSpeed = m_fMaxSpeed * 0.5f;
+    public float m_fFastEntrySpeed = m_fMaxSpeed * 0.8f;  // Speed required to re-enter fast mode
+    public float m_fIncSpeed = 0.001f;
     public float m_fMagnitudeFast = 0.6f;
     public float m_fMagnitudeSlow = 0.06f;
     public float m_fFastRotateSpeed = 0.2f;
-    public float m_fFastRotateMax = 10.0f;
+    public float m_fFastRotateMax = 5.0f;
     public float m_fDiveTime = 0.3f;
     public float m_fDiveRecoveryTime = 0.5f;
     public float m_fDiveDistance = 3.0f;
@@ -26,7 +27,7 @@ public class Player : MonoBehaviour
     public float m_fTargetAngle;
     public eState m_nState;
     public float m_fDiveStartTime;
-
+    public bool m_bFrozen = false;  // Frozen during catch sequence
 
     /// <summary>   Player FSM states, cast to int for color array indexing.   </summary>
     public enum eState : int    // State Enumerators
@@ -121,6 +122,13 @@ public class Player : MonoBehaviour
     ///             and updates the player's color to reflect the active state.               /// </summary>
     void FixedUpdate()
     {
+        if (m_bFrozen)
+        {
+            return; // Skip all input and movement
+        }
+        
+        
+        
         // Process input
         UpdateDirectionAndSpeed();
         CheckForDive();
@@ -190,7 +198,7 @@ public class Player : MonoBehaviour
 
 
         // Transition to fast move once speed exceeds threshold
-        if (m_fSpeed >= m_fSlowSpeed)
+        if (m_fSpeed >= m_fFastEntrySpeed)
         {
             m_nState = eState.kMoveFast;
         }

@@ -17,19 +17,27 @@ public class Target : MonoBehaviour
         kIdle,          // 0 - Stationary, waiting
         kHopStart,      // 1 - Calculating hop direction
         kHop,           // 2 - Executing hop movement
-        kCaught,        // 3 - Attached to player, game over
-        kTaunt,         // 4 - Taunting the player during recovery
-        kNumStates      // 5 - Sentinel value (array size helper)
+        kCatchBounce,   // 3 - Bouncing away from player on catch
+        kCatchPulse,    // 4 - Pulsing colors in sync with player
+        kCatchDance,    // 5 - Mips does a defeat dance
+        kCatchApproach, // 6 - Mips walks toward player
+        kCaught,        // 7 - Attached to player, game over
+        kTaunt,         // 8 - Taunting the player during recovery
+        kNumStates      // 9 - Sentinel value (array size helper)
     }
 
 
     // STATE COLOR MAPPING
     private Color[] stateColors = new Color[(int)eState.kNumStates]
    {
-        new Color(255, 0,   0),
-        new Color(0,   255, 0),
-        new Color(0,   0,   255),
-        new Color(255, 255, 255),
+        new Color(255, 0,   0),     // kIdle: Red
+        new Color(0,   255, 0),     // kHopStart: Green
+        new Color(0,   0,   255),   // kHop: Blue
+        new Color(255, 128, 0),     // kCatchBounce: Orange
+        new Color(255, 0, 255),     // kCatchPulse: Magenta (will pulse)
+        new Color(0, 255, 255),     // kCatchDance: Cyan
+        new Color(128, 0, 255),     // kCatchApproach: Purple
+        new Color(255, 255, 255),   // kCaught: White
         new Color(255, 255, 0)      // kTaunt Yellow
    };
 
@@ -41,6 +49,20 @@ public class Target : MonoBehaviour
     public float m_fTauntTime = 0.5f;       // Duration of the taunt spin
     public AudioClip m_tauntClip;           // Taunt sound effect (assign in Inspector)
 
+    //Catch sequence tunables
+    public float m_fBounceDistance = 2.0f;  // How far both bounce apart
+    public float m_fBounceTime = 0.3f;      // Duration of bounce
+    public float m_fPulseTime = 1.5f;       // Duration of color pulsing
+    public float m_fPulseSpeed = 8.0f;      // Speed of color pulse
+    public float m_fDanceTime = 2.0f;       // Duration of defeat dance
+    public float m_fDanceSpinSpeed = 720f;  // Degrees per second during dance
+    public float m_fDanceBobSpeed = 5.0f;   // Vertical bob speed during dance
+    public float m_fDanceBobHeight = 0.3f;  // Vertical bob amplitude
+    public float m_fApproachSpeed = 0.03f;  // Speed Mips walks toward player
+    public float m_fAttachDistance = 0.6f;  // Distance to snap and attach
+    public AudioClip m_catchClip;           // Sound on initial catch
+    public AudioClip m_danceClip;           // Sound during dance
+
     // Internal variables.
     public eState m_nState;          // Current FSM state
     public float m_fHopStart;        // Timestamp when the current hop began
@@ -49,6 +71,14 @@ public class Target : MonoBehaviour
     public float m_fTauntStartTime;  // Timestamp when taunt began
     public float m_fTauntStartAngle; // Starting angle for the spin
     public AudioSource m_audioSource;// Audio source component
+
+    // Catch sequence internal state
+    public float m_fCatchStartTime;        // Timestamp for current catch phase
+    public Vector3 m_vBounceStartPos;      // Bounce start position
+    public Vector3 m_vBounceEndPos;        // Bounce end position
+    public Vector3 m_vDanceOrigin;         // Center point of the dance
+    public Color m_cPulseColorA;           // First pulse color
+    public Color m_cPulseColorB;           // Second pulse color
 
 
     /// <summary>
@@ -80,7 +110,7 @@ public class Target : MonoBehaviour
     /// (not partially clipped at the edge)
     /// </summary>
     /// <returns>Half-extents of the visible screen area in world space.</returns>
-    
+
     Vector2 GetScreenBounds()
     {
         // Convert top-right corner of screen from viewport to world space.
@@ -158,10 +188,30 @@ public class Target : MonoBehaviour
             case eState.kTaunt:
                 HandleTaunt();
                 break;
+
+            case eState.kCatchBounce:
+                HandleCatchBounce();
+                break;
+
+            case eState.kCatchPulse:
+                HandleCatchPulse();
+                break;
+
+            case eState.kCatchDance:
+                HandleCatchDance();
+                break;
+
+            case eState.kCatchApproach:
+                HandleCatchApproach();
+                break;
         }
-        
-        // Update visual state feedback
-        GetComponent<Renderer>().material.color = stateColors[(int)m_nState];
+
+        // Update visual state feedback (skip during pulse - handled directly in HandleCatchPulse)
+        if (m_nState != eState.kCatchPulse)
+        {
+            GetComponent<Renderer>().material.color = stateColors[(int)m_nState];
+
+        }
     }
 
 
@@ -178,14 +228,14 @@ public class Target : MonoBehaviour
     /// Transitions:
     ///     -> kHopStart: When player enters the scared distance radius
     /// </summary>
-    
+
     void HandleIdle()
     {
         // Calculate distance to player
         float fDistance = Vector3.Distance(transform.position, m_player.transform.position);
 
         // If player is within the scared radius, start evading
-        if(fDistance < m_fScaredDistance)
+        if (fDistance < m_fScaredDistance)
         {
             m_nState = eState.kHopStart;
         }
@@ -270,7 +320,7 @@ public class Target : MonoBehaviour
                     float fNewDistance = Vector3.Distance(
                         vTestPos, m_player.transform.position);
 
-                    if(fNewDistance > fCurrentDistance)
+                    if (fNewDistance > fCurrentDistance)
                     {
                         m_vHopEndPos = vTestPos;
                         bFoundValid = true;
@@ -316,7 +366,7 @@ public class Target : MonoBehaviour
     ///     -> kHopStart: If hop completes but player is still within range
     ///                   This creates a chain of hops for persistent pursuit.
     /// </summary>
-    
+
 
     void HandleHop()
     {
@@ -324,7 +374,7 @@ public class Target : MonoBehaviour
         float fElapsed = Time.time - m_fHopStart;
         float t = fElapsed / m_fHopTime;
 
-        if(t < 1.0f)
+        if (t < 1.0f)
         {
             // Hop in progress - interpolate position
             transform.position = Vector3.Lerp(m_vHopStartPos, m_vHopEndPos, t);
@@ -335,16 +385,16 @@ public class Target : MonoBehaviour
             transform.position = m_vHopEndPos;
 
             //If player is recovering from a missed dive, taunt them
-            if(m_player.m_nState == Player.eState.kRecovering)
+            if (m_player.m_nState == Player.eState.kRecovering)
             {
                 m_fTauntStartTime = Time.time;
                 m_fTauntStartAngle = transform.rotation.eulerAngles.z;
                 m_nState = eState.kTaunt;
 
                 //Play taunt sound if available
-                if(m_audioSource != null && m_tauntClip != null)
+                if (m_audioSource != null && m_tauntClip != null)
                 {
-                    m_audioSource.PlayOneShot(m_tauntClip);
+                    m_audioSource.PlayOneShot(m_tauntClip, 0.1f);
                 }
                 return; // Skip the normal proximity check
             }
@@ -355,7 +405,7 @@ public class Target : MonoBehaviour
                    m_player.transform.position
             );
 
-            if(fDistance < m_fScaredDistance)
+            if (fDistance < m_fScaredDistance)
             {
                 // Player is still close - chain another hop immediately
                 m_nState = eState.kHopStart;
@@ -371,17 +421,17 @@ public class Target : MonoBehaviour
 
 
     ///<summary>
-    /// TAUNT STATEd
+    /// TAUNT STATE
     /// 
     /// Behavior: 
-    ///     - Mips does a 360 spin and plays a tuant sound.
+    ///     - Mips does a 360 spin and plays a taunt sound.
     ///     - Triggered when a hop completes while the player is recovering.
     ///     
     /// Transitions:
     ///     -> kIdle: If spin completes and player is far away
-    ///     -> kHopStart: If spin completes and player is till close
+    ///     -> kHopStart: If spin completes and player is still close
     /// </summary>
-    
+
     void HandleTaunt()
     {
         float fElapsed = Time.time - m_fTauntStartTime;
@@ -398,7 +448,7 @@ public class Target : MonoBehaviour
             // Taunt complete - check proximity for next state
             float fDistance = Vector3.Distance(transform.position, m_player.transform.position);
 
-            if(fDistance < m_fScaredDistance)
+            if (fDistance < m_fScaredDistance)
             {
                 m_nState = eState.kHopStart;
             }
@@ -441,13 +491,203 @@ public class Target : MonoBehaviour
         if (collision.gameObject == GameObject.Find("Player"))
         {
             // If the player is diving, it's a catch!
-            if (m_player.IsDiving())
+            if (m_player.IsDiving() && m_nState != eState.kCatchBounce && m_nState != eState.kCatchPulse
+                && m_nState != eState.kCatchDance && m_nState != eState.kCatchApproach && m_nState != eState.kCaught)
             {
-                m_nState = eState.kCaught;
-                transform.parent = m_player.transform;
-                transform.localPosition = new Vector3(0.0f, -0.5f, 0.0f);
-                transform.rotation = m_player.transform.rotation * Quaternion.Euler(0,0,90); // Face same direction as player
+                // Start catch sequence instead of immediate catch
+                m_fCatchStartTime = Time.time;
+
+                // Calculate bounce direction - away from player
+                Vector3 vBounceDir = (transform.position - m_player.transform.position).normalized;
+                m_vBounceStartPos = transform.position;
+                m_vBounceEndPos = ClampToBounds(transform.position + vBounceDir * m_fBounceDistance);
+
+                m_nState = eState.kCatchBounce;
+                m_player.m_bFrozen = true;
+
+                // Play catch sound
+                if (m_audioSource != null && m_catchClip != null)
+                {
+                    m_audioSource.PlayOneShot(m_catchClip, 4.0f);
+                }
+                
+             
             }
         }
     }
+
+
+
+
+
+
+    ///<summary>
+    ///
+    /// CATCH BOUNCE STATE
+    /// 
+    /// Behavior: 
+    ///     - Both Mips and Player bounce away from each other
+    ///     - Mips lerps to a position away from the collision point (should still be within screen bounds)
+    ///     - Player is frozen during this sequence 
+    ///     
+    /// Transitions:
+    ///     -> kCatchPulse: When bounce completes
+    /// </summary>
+    /// 
+    void HandleCatchBounce()
+    {
+        float fElapsed = Time.time - m_fCatchStartTime;
+        float t = fElapsed / m_fBounceTime;
+
+        if (t < 1.0f)
+        {
+            // Ease out for a natural bounce feel
+            float fEased = 1f - Mathf.Pow(1f - t, 2f);
+            transform.position = Vector3.Lerp(m_vBounceStartPos, m_vBounceEndPos, fEased);
+        }
+        else
+        {
+            // Bounce complete - start pulsing
+            transform.position = m_vBounceEndPos;
+            m_fCatchStartTime = Time.time;
+            m_cPulseColorA = new Color(1, 0, 1); //Magenta
+            m_cPulseColorB = new Color(1, 1, 0); // Yellow
+            m_nState = eState.kCatchPulse;
+        }
+    }
+
+
+
+
+
+
+    ///<summary>
+    ///
+    /// CATCH PULSE STATE
+    /// 
+    /// Behavior: 
+    ///     - Both Mips and player pulse between two colors
+    ///     - Uses a sine wave for smooth oscillation
+    ///     - Creates a visual "connection" between the two
+    ///     
+    /// Transitions:
+    ///     -> kCatchDance: When pulse duration expires
+    /// </summary>
+    void HandleCatchPulse() {
+        float fElapsed = Time.time - m_fCatchStartTime;
+
+        if (fElapsed < m_fPulseTime)
+        {
+            // Sine wave oscillation between two colors
+            float t = (Mathf.Sin(fElapsed * m_fPulseSpeed) + 1f) / 2f;
+            Color cPulse = Color.Lerp(m_cPulseColorA, m_cPulseColorB, t);
+
+
+            // Apply to both Mips and player
+            GetComponent<Renderer>().material.color = cPulse;
+            m_player.GetComponent<Renderer>().material.color = cPulse;
+            return;  // Skip the default color update in Fixed Update
+
+        }
+        else
+        {
+            // Pulse complete - start the dance
+            m_fCatchStartTime = Time.time;
+            m_vDanceOrigin = transform.position;
+            m_nState = eState.kCatchDance;
+
+            // Play dance audio if available
+            if (m_audioSource != null && m_danceClip != null)
+            {
+                m_audioSource.PlayOneShot(m_danceClip, 4.0f);
+            }
+        }
+    }
+
+
+
+
+    ///<summary>
+    ///
+    /// CATCH DANCE STATE
+    /// 
+    /// Behavior: 
+    ///     - Mips spins in place while bobbing up and down
+    ///     - Creates a "defeated but dramatic" visual
+    ///     - Player remains frozen watching
+    ///     
+    /// 
+    /// Transitions:
+    ///     -> kCatchApproach: When dance duration expires
+    /// </summary>
+    /// 
+    void HandleCatchDance()
+    {
+        float fElapsed = Time.time - m_fCatchStartTime;
+
+        if(fElapsed < m_fDanceTime)
+        {
+            // Spin continuously
+            float fAngle = fElapsed * m_fDanceSpinSpeed;
+            transform.rotation = Quaternion.Euler(0, 0, fAngle);
+
+
+            // Bob up and down using sine wave
+            float fBob = Mathf.Sin(fElapsed * m_fDanceBobSpeed) * m_fDanceBobHeight;
+            transform.position = m_vDanceOrigin + new Vector3(0, fBob, 0);
+        }
+        else
+        {
+            // Dance complete - start approaching the player
+            m_fCatchStartTime = Time.time;
+            m_nState = eState.kCatchApproach;
+        }
+    }
+
+
+
+
+    ///<summary>
+    ///
+    /// CATCH APPROACH STATE
+    /// 
+    /// Behavior: 
+    ///     - Mips slowly walks toward the player
+    ///     - Faces the player as it approaches
+    ///     - When close enough, snaps and attaches
+    ///     
+    /// 
+    /// Transitions: 
+    ///     -> kCaught: When Mips is within attach distance of player
+    /// </summary>
+    /// 
+    void HandleCatchApproach()
+    {
+        // Calculate direction toward player
+        Vector3 vToPlayer = (m_player.transform.position - transform.position);
+        float fDistance = vToPlayer.magnitude;
+
+        if(fDistance > m_fAttachDistance)
+        {
+            // Move toward player
+            Vector3 vDir = vToPlayer.normalized;
+            transform.position += vDir * m_fApproachSpeed;
+
+
+            // Face the player (with sprite offset)
+            float fAngle = Mathf.Atan2(vDir.y, vDir.x) * Mathf.Rad2Deg + 270f;
+            transform.rotation = Quaternion.Euler(0, 0, fAngle);
+        }
+        else
+        {
+            // Close enough - attach to player
+            m_nState = eState.kCaught;
+            transform.parent = m_player.transform;
+            transform.localPosition = new Vector3(0.0f, -0.5f, 0.0f);
+            transform.rotation = m_player.transform.rotation * Quaternion.Euler(0, 0, 90);
+
+            m_player.m_bFrozen = false;
+        }
+    }
+
 }

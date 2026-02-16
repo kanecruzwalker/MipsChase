@@ -23,7 +23,7 @@ public class PauseManager : MonoBehaviour
     // UI References - assign in Inspector
     public GameObject m_pauseMenuPanel;     // The pause menu panel
     public Slider m_volumeSlider;           // Volume control slider
-    public Target m_target;                 // Refernce to Target for audio control
+    public Target m_target;                 // Reference to Target for audio control
     public Button m_muteButton;             // Mute toggle button
     private bool m_bIsMuted = false;        // Track mute state
     private float m_fPreMuteVolume = 0.3f;  // Store volume before muting
@@ -144,7 +144,7 @@ public class PauseManager : MonoBehaviour
         }
         else
         {
-            // Resore previous volume
+            // Restore previous volume
             m_volumeSlider.value = m_fPreMuteVolume;
             m_muteButton.GetComponentInChildren<TMPro.TextMeshProUGUI>().text = "Mute";
             PreviewAudio();
