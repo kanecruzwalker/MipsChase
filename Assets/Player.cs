@@ -124,7 +124,6 @@ public class Player : MonoBehaviour
     {
         if (m_bFrozen)
         {
-            GetComponent<Renderer>().material.color = stateColors[(int)m_nState];
             return; // Skip all input and movement
         }
         

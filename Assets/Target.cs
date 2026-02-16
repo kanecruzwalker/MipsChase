@@ -206,8 +206,12 @@ public class Target : MonoBehaviour
                 break;
         }
 
-        // Update visual state feedback
-        GetComponent<Renderer>().material.color = stateColors[(int)m_nState];
+        // Update visual state feedback (skip during pulse - handled directly in HandleCatchPulse)
+        if (m_nState != eState.kCatchPulse)
+        {
+            GetComponent<Renderer>().material.color = stateColors[(int)m_nState];
+
+        }
     }
 
 
